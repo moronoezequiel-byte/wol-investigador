@@ -12,7 +12,7 @@ from openai import OpenAI
 APP_VERSION = "0.1.0"
 WOL_BASE = "https://wol.jw.org"
 WOL_SEARCH = "https://wol.jw.org/es/wol/s/r4/lp-s"
-MODEL = os.getenv("OPENAI_MODEL", "gpt-6")
+MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna")
 app = FastAPI(title="WOL Investigador", version=APP_VERSION)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
