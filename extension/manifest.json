@@ -1,0 +1,16 @@
+
+{
+  "manifest_version": 3,
+  "name": "WOL Investigador",
+  "version": "1.0.0",
+  "description": "Investiga preguntas en la Biblioteca en línea Watchtower.",
+  "action": {
+    "default_title": "WOL Investigador",
+    "default_popup": "popup.html"
+  },
+  "permissions": [],
+  "host_permissions": [
+    "https://wol.jw.org/*",
+    "https://wol-investigador.onrender.com/*"
+  ]
+}
