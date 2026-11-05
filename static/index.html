@@ -1,0 +1,61 @@
+
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17324d">
+  <meta name="description" content="Investigador de artículos de la Biblioteca en Línea Watchtower">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <title>WOL Investigador</title>
+  <style>
+    *{box-sizing:border-box}
+    body{margin:0;background:#f4f6f8;color:#17212b;font:16px system-ui,sans-serif}
+    main{max-width:760px;margin:0 auto;padding:32px 18px}
+    .panel{background:white;border:1px solid #dce3e9;border-radius:16px;padding:22px}
+    h1{margin:0 0 8px;font-size:28px}
+    p{line-height:1.5;color:#526170}
+    textarea{width:100%;min-height:115px;padding:14px;border:1px solid #bbc7d1;border-radius:10px;font:inherit}
+    button{margin-top:12px;background:#17324d;color:white;border:0;border-radius:10px;padding:12px 18px;font:inherit;font-weight:600}
+    button:disabled{opacity:.55}
+    #status{margin-top:16px}
+    .result{padding:16px 0;border-bottom:1px solid #e5eaee}
+    .result a{color:#145b91;font-weight:650}
+    .note{margin:6px 0 0;font-size:14px}
+  </style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <h1>WOL Investigador</h1>
+    <p>Escribí qué tema querés investigar. La herramienta buscará artículos en wol.jw.org y evaluará cuáles parecen tratar realmente el tema.</p>
+    <form id="form">
+      <textarea id="question" placeholder="Por ejemplo: ¿Puede una criatura espiritual ser destruida?" required></textarea>
+      <button id="submit" type="submit">Buscar artículos</button>
+    </form>
+    <div id="status" aria-live="polite"></div>
+    <div id="results"></div>
+  </section>
+</main>
+<script>
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/static/sw.js").catch(()=>{});
+const form=document.querySelector("#form"), question=document.querySelector("#question");
+const button=document.querySelector("#submit"), statusBox=document.querySelector("#status"), results=document.querySelector("#results");
+form.addEventListener("submit",async e=>{
+  e.preventDefault(); results.innerHTML=""; statusBox.textContent="Buscando y evaluando artículos…"; button.disabled=true;
+  try{
+    const response=await fetch("/api/research",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:question.value})});
+    const data=await response.json(); if(!response.ok) throw new Error(data.detail||"No se pudo completar la búsqueda.");
+    statusBox.textContent=data.message||`Se encontraron ${data.results.length} artículos pertinentes.`;
+    for(const item of data.results){
+      const div=document.createElement("article"); div.className="result";
+      const a=document.createElement("a"); a.href=item.url; a.target="_blank"; a.rel="noopener"; a.textContent=item.title;
+      const note=document.createElement("p"); note.className="note"; note.textContent=item.note||"";
+      div.append(a,note); results.append(div);
+    }
+  }catch(err){statusBox.textContent=err.message}
+  finally{button.disabled=false}
+});
+</script>
+</body>
+</html>
