@@ -2,7 +2,7 @@
 import os
 import re
 import json
-import asyncio
+import time
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
@@ -16,13 +16,17 @@ from openai import OpenAI
 from google import genai
 
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 
 WOL_BASE = "https://wol.jw.org"
 WOL_SEARCH = "https://wol.jw.org/es/wol/s/r4/lp-s"
 
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna")
+
+# Reintentos ante interrupciones temporales de Gemini.
+GEMINI_MAX_ATTEMPTS = 3
+GEMINI_RETRY_DELAYS = [2, 5]
 
 app = FastAPI(title="WOL Investigador", version=APP_VERSION)
 
@@ -53,6 +57,28 @@ def parse_json(raw: str) -> dict:
     return json.loads(raw)
 
 
+def is_temporary_gemini_error(error: Exception) -> bool:
+    """
+    Identifica errores temporales de disponibilidad.
+    No reintenta errores de cuota que podrían requerir
+    esperar mucho tiempo.
+    """
+    message = str(error).upper()
+
+    temporary_markers = (
+        "503",
+        "UNAVAILABLE",
+        "500 INTERNAL",
+        "502",
+        "504",
+        "INTERNAL SERVER ERROR",
+        "TEMPORARILY UNAVAILABLE",
+        "OVERLOADED",
+    )
+
+    return any(marker in message for marker in temporary_markers)
+
+
 def ask_ai(instructions: str, payload: dict[str, Any]) -> dict:
     content = json.dumps(payload, ensure_ascii=False)
     errors = []
@@ -65,31 +91,58 @@ def ask_ai(instructions: str, payload: dict[str, Any]) -> dict:
         client = None
 
         try:
-            print(f"IA: intentando con Gemini ({GEMINI_MODEL})")
-
             client = genai.Client(api_key=gemini_key)
 
-            response = client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=content,
-                config={
-                    "system_instruction": instructions,
-                    "response_mime_type": "application/json",
-                    "temperature": 0.1,
-                    "max_output_tokens": 3000,
-                },
-            )
+            for attempt in range(GEMINI_MAX_ATTEMPTS):
+                try:
+                    print(
+                        f"IA: intentando con Gemini ({GEMINI_MODEL}), "
+                        f"intento {attempt + 1}/{GEMINI_MAX_ATTEMPTS}"
+                    )
 
-            result = parse_json(response.text)
+                    response = client.models.generate_content(
+                        model=GEMINI_MODEL,
+                        contents=content,
+                        config={
+                            "system_instruction": instructions,
+                            "response_mime_type": "application/json",
+                            "temperature": 0.1,
+                            "max_output_tokens": 3000,
+                        },
+                    )
 
-            print("IA: Gemini respondió correctamente.")
-            return result
+                    result = parse_json(response.text or "")
+
+                    print("IA: Gemini respondió correctamente.")
+                    return result
+
+                except Exception as e:
+                    message = f"{type(e).__name__}: {str(e)}"
+
+                    print("ERROR GEMINI:", message)
+
+                    # Solo reintentar errores temporales.
+                    if (
+                        is_temporary_gemini_error(e)
+                        and attempt < GEMINI_MAX_ATTEMPTS - 1
+                    ):
+                        delay = GEMINI_RETRY_DELAYS[attempt]
+
+                        print(
+                            f"Gemini no está disponible temporalmente. "
+                            f"Nuevo intento en {delay} segundos."
+                        )
+
+                        time.sleep(delay)
+                        continue
+
+                    errors.append("Gemini: " + message)
+                    break
 
         except Exception as e:
             message = f"{type(e).__name__}: {str(e)}"
             errors.append("Gemini: " + message)
-
-            print("ERROR GEMINI:", message)
+            print("ERROR INICIALIZANDO GEMINI:", message)
 
         finally:
             if client:
@@ -109,16 +162,20 @@ def ask_ai(instructions: str, payload: dict[str, Any]) -> dict:
 
             client = OpenAI(api_key=openai_key)
 
-            response = client.responses.create(
-                model=OPENAI_MODEL,
-                instructions=instructions,
-                input=content,
-            )
+            try:
+                response = client.responses.create(
+                    model=OPENAI_MODEL,
+                    instructions=instructions,
+                    input=content,
+                )
 
-            result = parse_json(response.output_text)
+                result = parse_json(response.output_text)
 
-            print("IA: OpenAI respondió correctamente.")
-            return result
+                print("IA: OpenAI respondió correctamente.")
+                return result
+
+            finally:
+                client.close()
 
         except Exception as e:
             message = f"{type(e).__name__}: {str(e)}"
@@ -283,7 +340,7 @@ async def search(req: SearchRequest):
 
     async with httpx.AsyncClient(
         headers={
-            "User-Agent": "WOLInvestigador/0.3",
+            "User-Agent": "WOLInvestigador/0.3.1",
         },
         timeout=25,
         follow_redirects=True,
@@ -302,6 +359,7 @@ async def search(req: SearchRequest):
                 print(f"ERROR buscando en WOL: {e}")
                 continue
 
+        # Conservamos los 8 candidatos.
         candidates = list(found.values())[:8]
 
         print("Artículos encontrados:", len(candidates))
@@ -317,7 +375,7 @@ async def search(req: SearchRequest):
 
         # ETAPA 3: LEER ARTÍCULOS
 
-        pages = await asyncio.gather(
+        pages = await __import__("asyncio").gather(
             *(read_article(client, article) for article in candidates)
         )
 
@@ -420,5 +478,5 @@ async def search(req: SearchRequest):
             if selected
             else "No encontramos artículos que superen el criterio de pertinencia."
         ),
-    }
+                    }
     
