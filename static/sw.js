@@ -3,7 +3,7 @@ const CACHE_NAME = "wol-investigador-v1";
 
 const APP_FILES = [
   "/",
-  "/manifest.webmanifest"
+  "/static/manifest.webmanifest"
 ];
 
 self.addEventListener("install", (event) => {
