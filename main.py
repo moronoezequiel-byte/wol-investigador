@@ -21,7 +21,7 @@ APP_VERSION = "0.3.0"
 WOL_BASE = "https://wol.jw.org"
 WOL_SEARCH = "https://wol.jw.org/es/wol/s/r4/lp-s"
 
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-6-luna")
 
 app = FastAPI(title="WOL Investigador", version=APP_VERSION)
