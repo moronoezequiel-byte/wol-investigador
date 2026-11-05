@@ -463,11 +463,7 @@ def read_article(article):
         publication = ""
         date = ""
 
-        metadata = soup.select(
-            ".publication",
-            ".date",
-            ".pubDate"
-        )
+        metadata = soup.select(".publication, .date, .pubDate")
 
         if metadata:
             publication = clean_text(
