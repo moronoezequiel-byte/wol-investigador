@@ -1,0 +1,82 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WOL Investigador</title>
+  <style>
+    body {
+      width: 340px;
+      padding: 18px;
+      font-family: Arial, sans-serif;
+      background: #f5f7fa;
+      color: #1d2939;
+    }
+
+    h2 {
+      margin: 0 0 8px;
+      color: #263b57;
+    }
+
+    p {
+      font-size: 13px;
+      color: #667085;
+    }
+
+    textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 105px;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      resize: vertical;
+      font: inherit;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 11px;
+      border: 0;
+      border-radius: 8px;
+      background: #263b57;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h2>WOL Investigador</h2>
+  <p>Escribí una pregunta para investigar en la Biblioteca en línea Watchtower.</p>
+
+  <textarea id="question" placeholder="Ej.: ¿Qué dice la Biblioteca sobre el perdón de los pecados?"></textarea>
+
+  <button id="search">Investigar en WOL</button>
+
+  <div id="status"></div>
+
+  <script>
+    const API_URL = "https://wol-investigador.onrender.com";
+
+    document.getElementById("search").addEventListener("click", async () => {
+      const question = document.getElementById("question").value.trim();
+      const status = document.getElementById("status");
+
+      if (!question) {
+        status.textContent = "Escribí una pregunta primero.";
+        return;
+      }
+
+      status.textContent = "La búsqueda estará disponible cuando publiquemos el servidor.";
+    });
+  </script>
+</body>
+</html>
