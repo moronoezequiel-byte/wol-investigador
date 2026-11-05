@@ -97,7 +97,7 @@ async def search(req: SearchRequest):
                     found[a["url"]] = a
             except httpx.HTTPError:
                 continue
-        candidates = list(found.values())[:35]
+        candidates = list(found.values())[:8]
         if not candidates:
             return {"concept": plan.get("concept", ""), "articles": [],
                     "message": "WOL no devolvió artículos para estas búsquedas."}
