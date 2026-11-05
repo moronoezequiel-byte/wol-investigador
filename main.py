@@ -112,7 +112,7 @@ async def search(req: SearchRequest):
         "score es entero 1-5; incluí solo 4 o 5. URLs exactas, no inventes ni modifiques títulos o enlaces.",
         {"question": req.question, "concept": plan.get("concept", ""), "facets": plan.get("facets", []),
          "articles": [{"title": a["title"], "url": a["url"], "publication": a.get("publication", ""),
-                      "content": a["body"][:8500]} for a in readable]})
+                      "content": a["body"][:3000]} for a in readable]})
     by_url = {a["url"]: a for a in readable}
     selected = []
     for x in judged.get("articles", []):
