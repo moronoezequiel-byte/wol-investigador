@@ -1,0 +1,13 @@
+
+{
+  "name": "WOL Investigador",
+  "short_name": "WOL Investigador",
+  "description": "Buscador inteligente de publicaciones de la Biblioteca en línea Watchtower.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#263b57",
+  "lang": "es"
+}
