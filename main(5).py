@@ -355,42 +355,4 @@ def investigate(request):
     evaluated, eval_provider = ai_evaluation(question, articles)
     selected = {}
     if evaluated is not None:
-        for item in evaluated: selected[item["index"]] = item["relevance"]
-        if not selected:
-            for idx, article in enumerate(articles):
-                local = local_evaluation(question, article)
-                if local and strong_local_match(question, article, local): selected[idx] = local["relevance"]
-    else:
-        for idx, article in enumerate(articles):
-            local = local_evaluation(question, article)
-            if local: selected[idx] = local["relevance"]
-        eval_provider = "local"
-    final = []
-    for idx, article in enumerate(articles):
-        if idx not in selected: continue
-        item = {k: article[k] for k in ("title", "url", "publication", "date") if article.get(k)}
-        item["relevance"] = selected[idx]
-        final.append(item)
-    final = final[:request.max_results]
-    print("DIAGNOSTICO EVALUACION", "aceptados", len(selected), "devueltos", len(final), "proveedor", eval_provider)
-    message = (f"Se encontraron {len(final)} artículos que pueden ser pertinentes. Abrí cada uno para consultar el contenido original."
-               if final else "No encontramos artículos que superen la evaluación de pertinencia. Probá con una formulación más concreta o con un sinónimo del tema.")
-    provider = eval_provider if eval_provider != "local" else plan["provider"]
-    return {"topic": plan["topic"], "articles": final, "message": message, "provider": provider}
-
-@app.get("/")
-def home():
-    index_file = STATIC / "index.html"
-    if not index_file.exists(): return {"service": "WOL Investigador", "version": APP_VERSION}
-    return FileResponse(index_file)
-
-@app.get("/health")
-def health():
-    return {"ok": True, "version": APP_VERSION, "service": "wol-investigador"}
-
-@app.post("/api/search")
-def search(request: SearchRequest):
-    try: return investigate(request)
-    except Exception as exc:
-        print("ERROR GENERAL DE BÚSQUEDA:", type(exc).__name__)
-        raise HTTPException(status_code=500, detail="Ocurrió un error durante la investigación. Intentá nuevamente más tarde.")
+        for item in evaluated: select
