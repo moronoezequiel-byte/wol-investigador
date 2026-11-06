@@ -15,8 +15,8 @@ BASE = Path(__file__).resolve().parent
 STATIC = BASE / "static"
 WOL_ORIGIN = "https://wol.jw.org"
 WOL_SEARCH = "https://wol.jw.org/es/wol/s/r4/lp-s"
-APP_VERSION = "0.6.0"
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+APP_VERSION = "0.6.1"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 HTTP_TIMEOUT = httpx.Timeout(16.0, connect=8.0)
 USER_AGENT = "Mozilla/5.0 (compatible; WOLInvestigador/0.6.0; +https://wol.jw.org/)"
@@ -100,7 +100,7 @@ SEMANTIC_GROUPS = {
     "consuelo": {"consuelo", "consolar", "animar", "animo", "fortalecer", "dar fuerzas", "apoyo", "aliento"},
     "culpa": {"culpa", "sentirse culpable", "remordimiento", "arrepentimiento", "perdon", "perdonar"},
     "soledad": {"soledad", "aislamiento", "solo", "solitario", "falta de compania"},
-    "espirituales": {"criatura espiritual", "criaturas espirituales", "ser espiritual", "seres espirituales", "angel", "angeles", "demonio", "demonios", "satanas"},
+    "espirituales": {"criatura espiritual", "criaturas espirituales", "ser espiritual", "seres espirituales", "angel", "angeles", "demonio", "demonios", "satanas", "espiritu", "espiritus", "muerte", "morir", "destruccion", "destruir", "destruido", "destruida", "existencia", "vida", "inmortal"},
 }
 
 
@@ -357,7 +357,23 @@ def local_evaluation(question, article):
     phrase, title_phrase = norm_key(question), norm_key(article.get("title", ""))
     exact = bool(phrase and phrase in title_phrase)
     score = len(title_hits) * 4 + min(len(body_hits), 12) + len(core_title) * 2 + (10 if exact else 0)
-    if exact:
+    spiritual_terms = {
+        "criatura", "criaturas", "espiritual", "espirituales", "angel", "angeles",
+        "demonio", "demonios", "satanas", "espiritu", "espiritus"
+    }
+    destruction_terms = {
+        "muerte", "morir", "destruccion", "destruir", "destruido", "destruida",
+        "fin", "existencia", "vida"
+    }
+    spiritual_question = bool(expanded & spiritual_terms) and bool(
+        {"criatura", "espiritual", "angel", "angeles", "demonio", "demonios"} & expanded
+    )
+    spiritual_title_hits = title & spiritual_terms
+    spiritual_body_hits = body & (spiritual_terms | destruction_terms)
+
+    if spiritual_question and spiritual_title_hits and len(spiritual_body_hits) >= 2:
+        reason = "El título identifica a seres espirituales y el contenido trata su existencia, muerte o destrucción."
+    elif exact:
         reason = "El título coincide directamente con el tema de la consulta."
     elif len(core_title) >= 2 and len(core_body) >= 2:
         reason = "El título y el contenido desarrollan el tema mediante: " + ", ".join(sorted(core_title | core_body)[:4]) + "."
@@ -403,111 +419,4 @@ Artículos: {json.dumps(payload, ensure_ascii=False)}"""
         if not isinstance(data, dict) or not isinstance(data.get("relevant"), list):
             failed.extend(range(offset, offset + len(batch)))
             continue
-        valid_response = True
-        if provider != "local":
-            provider_used = provider
-        for item in data["relevant"]:
-            if not isinstance(item, dict):
-                continue
-            try:
-                idx = int(item.get("id"))
-            except (ValueError, TypeError):
-                continue
-            if offset <= idx < offset + len(batch):
-                reason = clean_text(item.get("reason", ""))
-                if reason:
-                    accepted.append({"index": idx, "relevance": reason[:320]})
-    if valid_response:
-        for idx in failed:
-            local = local_evaluation(question, articles[idx])
-            if local and strong_local_match(question, articles[idx], local):
-                accepted.append({"index": idx, "relevance": local["relevance"]})
-        return accepted, provider_used
-    return None, "local"
-
-
-def investigate(request):
-    question = clean_text(request.question)
-    plan = interpret_question(question)
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        results_by_query = list(pool.map(search_wol, plan["queries"]))
-    candidates, seen, counts = [], set(), []
-    for query, results in zip(plan["queries"], results_by_query):
-        counts.append((query, len(results)))
-        for item in results:
-            if item["url"] not in seen:
-                seen.add(item["url"])
-                candidates.append(item)
-    candidates = candidates[:24]
-    print("DIAGNOSTICO PLAN", json.dumps(counts, ensure_ascii=False), "CANDIDATOS_UNICOS", len(candidates))
-    if not candidates:
-        return {"topic": plan["topic"], "articles": [], "message": "No se encontraron artículos en WOL con las consultas realizadas. Probá reformular el tema o usar otras palabras.", "provider": plan["provider"]}
-
-    articles = []
-    with ThreadPoolExecutor(max_workers=5) as pool:
-        futures = [pool.submit(read_article, item) for item in candidates]
-        for future in as_completed(futures):
-            try:
-                article = future.result()
-                if article:
-                    articles.append(article)
-            except Exception as exc:
-                print("ERROR lectura concurrente:", type(exc).__name__, safe_error(exc))
-    order = {item["url"]: i for i, item in enumerate(candidates)}
-    articles.sort(key=lambda a: order.get(a["url"], 999))
-    print("DIAGNOSTICO LECTURA", len(articles), "DE", len(candidates))
-    if not articles:
-        return {"topic": plan["topic"], "articles": [], "message": "WOL devolvió resultados, pero no se pudo recuperar suficiente texto de los artículos. Intentá nuevamente más tarde.", "provider": plan["provider"]}
-
-    evaluated, eval_provider = ai_evaluation(question, articles)
-    selected = {}
-    if evaluated is not None:
-        for item in evaluated:
-            selected[item["index"]] = item["relevance"]
-        if not selected:
-            for idx, article in enumerate(articles):
-                local = local_evaluation(question, article)
-                if local and strong_local_match(question, article, local):
-                    selected[idx] = local["relevance"]
-    else:
-        for idx, article in enumerate(articles):
-            local = local_evaluation(question, article)
-            if local:
-                selected[idx] = local["relevance"]
-        eval_provider = "local"
-
-    final = []
-    for idx, article in enumerate(articles):
-        if idx not in selected:
-            continue
-        item = {k: article[k] for k in ("title", "url", "publication", "date") if article.get(k)}
-        item["relevance"] = selected[idx]
-        final.append(item)
-    final = final[:request.max_results]
-    print("DIAGNOSTICO EVALUACION", "aceptados", len(selected), "devueltos", len(final), "proveedor", eval_provider)
-    message = (f"Se encontraron {len(final)} artículos que pueden ser pertinentes. Abrí cada uno para consultar el contenido original."
-               if final else "No encontramos artículos que superen la evaluación de pertinencia. Probá con una formulación más concreta o con un sinónimo del tema.")
-    provider = eval_provider if eval_provider != "local" else plan["provider"]
-    return {"topic": plan["topic"], "articles": final, "message": message, "provider": provider}
-
-
-@app.get("/")
-def home():
-    index_file = STATIC / "index.html"
-    if not index_file.exists():
-        return {"service": "WOL Investigador", "version": APP_VERSION}
-    return FileResponse(index_file)
-
-
-@app.get("/health")
-def health():
-    return {"ok": True, "version": APP_VERSION, "service": "wol-investigador"}
-
-
-@app.post("/api/search")
-def search(request: SearchRequest):
-    try:
-        return investigate(request)
-    except Exception as exc:
-        print("ERROR GENERAL DE BÚSQUEDA:", type(exc).__name__, safe_error(exc))
-        raise HTTPException(status_code=500, detail="Ocurrió un error durante la investigación. Intentá nuevamente más tarde.")
+ 
